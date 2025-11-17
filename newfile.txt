@@ -1,0 +1,485 @@
+Program 2
+
+import java.io.IOException;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.*;
+import org.apache.hadoop.mapreduce.*;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+
+public class MatrixMultiply {
+
+    public static class MapperMM extends Mapper<Object, Text, Text, Text> {
+        public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
+            String[] parts = value.toString().split("\\s+");
+
+            String matrix = parts[0];
+            int i = Integer.parseInt(parts[1]);
+            int j = Integer.parseInt(parts[2]);
+            int val = Integer.parseInt(parts[3]);
+
+            if(matrix.equals("A")) {
+                // Emit for all columns of B (k)
+                for(int k = 0; k < 10; k++)   // assuming max 10 columns
+                    context.write(new Text(i + "," + k), new Text("A," + j + "," + val));
+            } else {
+                // Emit for all rows of A (i)
+                for(int k = 0; k < 10; k++)
+                    context.write(new Text(k + "," + j), new Text("B," + i + "," + val));
+            }
+        }
+    }
+
+    public static class ReducerMM extends Reducer<Text, Text, Text, IntWritable> {
+        public void reduce(Text key, Iterable<Text> values, Context context)
+                throws IOException, InterruptedException {
+
+            int[] A = new int[10];
+            int[] B = new int[10];
+
+            for (Text val : values) {
+                String[] parts = val.toString().split(",");
+                if (parts[0].equals("A"))
+                    A[Integer.parseInt(parts[1])] = Integer.parseInt(parts[2]);
+                else
+                    B[Integer.parseInt(parts[1])] = Integer.parseInt(parts[2]);
+            }
+
+            int sum = 0;
+            for(int k = 0; k < 10; k++)
+                sum += A[k] * B[k];
+
+            context.write(key, new IntWritable(sum));
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        Configuration conf = new Configuration();
+        Job job = Job.getInstance(conf, "Matrix Multiply");
+
+        job.setJarByClass(MatrixMultiply.class);
+        job.setMapperClass(MapperMM.class);
+        job.setReducerClass(ReducerMM.class);
+
+        job.setOutputKeyClass(Text.class);
+        job.setOutputValueClass(Text.class);
+
+        FileInputFormat.addInputPath(job, new Path(args[0]));
+        FileOutputFormat.setOutputPath(job, new Path(args[1]));
+
+        job.waitForCompletion(true);
+    }
+}
+
+
+Program 3 
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Job; import
+org.apache.hadoop.mapreduce.Mapper; import
+org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat; import
+org.apache.hadoop.mapreduce.lib.output.FileOutputFormat; import
+java.io.IOException;
+public class WeatherMapReduce {
+public static class WeatherMapper extends Mapper<Object, Text, Text, Text> {
+public void map(Object key, Text value, Context context) throws IOException,
+InterruptedException
+{
+// Parse the weather data (assuming CSV format) String[]
+fields = value.toString().split(",");
+String city = fields[0]; // Assume city name is in the first column
+String temperature = fields[1]; // Assume temperature is in the second column
+// Create the output key-value pair
+String weatherCondition = getWeatherCondition(temperature);
+context.write(new Text(city), new Text(weatherCondition));
+}
+private String getWeatherCondition(String temperature) { double
+temp = Double.parseDouble(temperature);
+if (temp < 0) { return
+"Freezing";
+} else if (temp >= 0 && temp <= 15) {
+return "Cold";
+} else if (temp > 15 && temp <= 25) {
+return "Warm";
+} else { return
+"Hot";
+}
+}
+}
+public static class WeatherReducer extends Reducer<Text, Text, Text, Text> {
+public void reduce(Text key, Iterable<Text> values, Context context) throws IOException,
+InterruptedException {
+// Combine the weather data for each cityStringBuilder conditions = new StringBuilder(); for (Text val :
+values) { conditions.append(val.toString()).append(" ");
+}
+context.write(key, new Text(conditions.toString().trim()));
+}
+}
+public static void main(String[] args) throws Exception {
+Configuration conf = new Configuration();
+Job job = Job.getInstance(conf, "Weather MapReduce");
+job.setJarByClass(WeatherMapReduce.class);
+job.setMapperClass(WeatherMapper.class);
+job.setCombinerClass(WeatherReducer.class);
+job.setReducerClass(WeatherReducer.class);
+job.setOutputKeyClass(Text.class);
+job.setOutputValueClass(Text.class);
+FileInputFormat.addInputPath(job, new Path(args[0]));
+FileOutputFormat.setOutputPath(job, new Path(args[1]));
+System.exit(job.waitForCompletion(true) ? 0 : 1);
+}
+}
+
+
+
+
+Program 4
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Job; import
+org.apache.hadoop.mapreduce.Mapper; import
+org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat; import
+org.apache.hadoop.mapreduce.lib.output.FileOutputFormat; import
+java.io.IOException;
+import java.util.HashSet;
+import java.util.Set; public
+class MovieTags {
+// Mapper class
+public static class TagMapper extends Mapper<Object, Text, Text,
+Text> {
+private Text movieId = new Text(); private
+Text tag = new Text();
+public void map(Object key, Text value, Context context) throws
+IOException, InterruptedException {
+// The line format is: userId, movieId, tag, timestamp String[]
+tokens = value.toString().split(",");
+if (tokens.length == 4) {
+movieId.set(tokens[1]);
+tag.set(tokens[2]);
+context.write(movieId, tag);
+}
+}
+}
+// Reducer class
+public static class TagReducer extends Reducer<Text, Text, Text,
+Text> {
+private Text result = new Text();
+public void reduce(Text key, Iterable<Text> values, Context
+context) throws IOException, InterruptedException { Set<String>
+tags = new HashSet<>();
+// Collect tags for each movie for
+(Text val : values) {
+tags.add(val.toString());
+}
+// Combine tags into a single string and write output
+result.set(String.join(", ", tags)); context.write(key, result);
+}
+}
+// Driver class
+public static void main(String[] args) throws Exception { if
+(args.length != 2) {
+System.err.println("Usage: MovieTags <input path> <output
+path>");
+System.exit(-1);
+}
+// Configuration and Job setup Configuration
+conf = new Configuration();
+Job job = Job.getInstance(conf, "Movie Tags");
+// Set the Jar file
+job.setJarByClass(MovieTags.class);
+// Set Mapper and Reducer classes
+job.setMapperClass(TagMapper.class);
+job.setReducerClass(TagReducer.class);
+// Set output key and value types
+job.setOutputKeyClass(Text.class);
+job.setOutputValueClass(Text.class);
+// Set input and output paths
+FileInputFormat.addInputPath(job, new Path(args[0]));
+FileOutputFormat.setOutputPath(job, new Path(args[1]));
+// Wait for job completion
+System.exit(job.waitForCompletion(true) ? 0 : 1);
+}
+}
+
+
+
+Program 5
+
+Dataset (users collection) inserted into MongoDB:
+db.users.insertMany([
+{ name: "Alice", age: 30, gender: "Female", city: "New York" },
+{ name: "Bob", age: 25, gender: "Male", city: "Los Angeles" },
+{ name: "Charlie", age: 35, gender: "Male", city: "Chicago" },
+{ name: "David", age: 28, gender: "Male", city: "San Francisco" },
+{ name: "Eve", age: 22, gender: "Female", city: "Boston" },
+{ name: "Frank", age: 40, gender: "Male", city: "Houston" },
+{ name: "Grace", age: 27, gender: "Female", city: "Miami" },
+{ name: "Hannah", age: 29, gender: "Female", city: "Seattle" },
+{ name: "Isaac", age: 31, gender: "Male", city: "Denver" },
+{ name: "Jack", age: 26, gender: "Male", city: "Dallas" }
+])
+1. Count total documents
+db.users.countDocuments({})
+Output:
+10
+2. Count users older than 25
+db.users.countDocuments({ age: { $gt: 25 } })
+Output:
+7
+3. Sort users by age (ascending)
+db.users.find().sort({ age: 1 })
+Output:
+[
+{ "name": "Eve", "age": 22, "gender": "Female", "city": "Boston" },
+{ "name": "Bob", "age": 25, "gender": "Male", "city": "Los Angeles" },
+{ "name": "Jack", "age": 26, "gender": "Male", "city": "Dallas" },
+{ "name": "Grace", "age": 27, "gender": "Female", "city": "Miami" },
+{ "name": "David", "age": 28, "gender": "Male", "city": "San Francisco" },
+{ "name": "Hannah", "age": 29, "gender": "Female", "city": "Seattle" },
+{ "name": "Alice", "age": 30, "gender": "Female", "city": "New York" },
+{ "name": "Isaac", "age": 31, "gender": "Male", "city": "Denver" },
+{ "name": "Charlie", "age": 35, "gender": "Male", "city": "Chicago" },
+{ "name": "Frank", "age": 40, "gender": "Male", "city": "Houston" }
+]
+4. Skip Documents
+Skips a certain number of documents.
+db.users.find().skip(9)
+
+
+
+Program 6
+
+Create the following input files:
+1. employees.txt (Employee Data)
+101,John,IT,50000
+102,Susan,HR,60000
+103,David,IT,55000
+104,Emma,Finance,75000
+105,James,HR,62000
+106,Robert,IT,58000
+2. departments.txt (Department Data)
+IT,Information Technology
+HR,Human Resources
+Finance,Finance Department
+1. Sorting Data (Sort Employees by Salary in Descending Order)
+#Load employees data
+employees = LOAD 'employees.txt' USING PigStorage(',') AS (id:int, name:chararray, dept:chararray,
+salary:int);
+Sort employees by salary in descending order
+sorted_employees = ORDER employees BY salary DESC;
+#Display sorted result
+DUMP sorted_employees;
+2. Grouping Data (Group Employees by Department)
+#Load employees data
+employees = LOAD 'employees.txt' USING PigStorage(',') AS (id:int, name:chararray, dept:chararray,
+salary:int);
+#Group employees by department
+grouped_employees = GROUP employees BY dept;
+#Display grouped result
+DUMP grouped_employees;
+3. Joining Data (Join Employees with Department Names)
+#Load employees and departments data
+employees = LOAD 'employees.txt' USING PigStorage(',') AS (id:int, name:chararray, dept:chararray,
+salary:int);
+departments = LOAD 'departments.txt' USING PigStorage(',') AS (dept_code:chararray,
+dept_name:chararray);
+#Join employees with department names on department code
+joined_data = JOIN employees BY dept, departments BY dept_code;
+#Project required columns
+projected_data = FOREACH joined_data GENERATE id, name, dept_name, salary;
+#Display joined result
+DUMP projected_data;
+
+
+Program 7
+
+DATABASES
+Create Database
+CREATE DATABASE IF NOT EXISTS my_database;
+Alter Database (Change Properties)
+ALTER DATABASE my_database SET DBPROPERTIES ('creator'='admin', 'created_on'='2025-04-07');
+Drop Database
+DROP DATABASE IF EXISTS my_database CASCADE;
+-- CASCADE removes all tables in the database
+TABLES
+Create Table
+CREATE TABLE IF NOT EXISTS my_table (
+id INT,
+name STRING
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+STORED AS TEXTFILE;
+Alter Table
+Rename Table
+ALTER TABLE my_table RENAME TO my_new_table;
+Add Column
+ALTER TABLE my_new_table ADD COLUMNS (age INT);
+Replace Columns
+ALTER TABLE my_new_table REPLACE COLUMNS (
+id INT,
+name STRING,
+age INT,
+city STRING
+);
+Drop Table
+DROP TABLE IF EXISTS my_new_table;
+VIEWS
+Create View
+CREATE VIEW IF NOT EXISTS my_view AS
+SELECT id, name FROM my_table;
+Alter View (Rename)
+ALTER VIEW my_view RENAME TO my_updated_view;
+Drop View
+DROP VIEW IF EXISTS my_updated_view;
+FUNCTIONS
+Create Function (Temporary UDF)
+CREATE TEMPORARY FUNCTION my_upper AS 'org.apache.hadoop.hive.ql.udf.UDFUpper';
+Create Permanent Function
+CREATE FUNCTION mydb.my_func AS 'com.example.MyUDF' USING JAR
+'hdfs:///user/hive/udfs/myudf.jar';
+Drop Function
+DROP FUNCTION IF EXISTS mydb.my_func;
+INDEXES
+Create Index
+CREATE INDEX my_index ON TABLE my_table (name)
+AS 'COMPACT' WITH DEFERRED REBUILD;
+Alter Index (Rebuild)
+ALTER INDEX my_index ON my_table REBUILD;
+Drop Index
+DROP INDEX IF EXISTS my_index ON my_table;
+1. Database Commands
+-- Create a database
+CREATE DATABASE book_db;
+-- Alter the database to add a property
+ALTER DATABASE book_db SET DBPROPERTIES ('created_by' = 'admin');
+-- Drop the database
+DROP DATABASE book_db CASCADE;
+2. Table Commands (using table book)
+-- Create a table named 'book'
+CREATE TABLE book (
+id INT,
+title STRING,
+author STRING
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+STORED AS TEXTFILE;
+-- Alter the table: add a new column
+ALTER TABLE book ADD COLUMNS (published_year INT);
+-- Rename the table
+ALTER TABLE book RENAME TO book_info;
+-- Drop the table
+DROP TABLE book_info;
+3. View Commands
+sql
+CopyEdit
+-- Create a view
+CREATE VIEW book_view AS
+SELECT id, title FROM book;
+-- Alter a view (Hive doesn't support ALTER VIEW directly for query changes)
+-- So, drop and recreate if you want to modify the view definition
+-- Example: Add a comment (metadata) to the view
+ALTER VIEW book_view SET TBLPROPERTIES ('comment' = 'Books title view');
+-- Drop the view
+DROP VIEW book_view;
+4. Function Commands
+You can use built-in or create your own UDF (User Defined Function) in Java. Below are
+examples of built-in function usage.
+-- Use a built-in UDF (e.g., UPPER)
+SELECT UPPER(title) FROM book;
+-- Register a custom UDF (if you have a JAR)
+ADD JAR /home/user/hive-udfs/myudf.jar;
+-- Create temporary function
+CREATE TEMPORARY FUNCTION custom_upper AS 'com.example.MyUpperUDF';
+-- Use the custom function
+SELECT custom_upper(title) FROM book;
+-- Drop the temporary function
+DROP TEMPORARY FUNCTION custom_upper;
+5. Index Commands (Hive supports limited indexing, usually
+with ORC files)
+-- Create an index on the title column
+CREATE INDEX book_title_index
+ON TABLE book (title)
+AS 'COMPACT'
+WITH DEFERRED REBUILD;
+-- Rebuild the index
+ALTER INDEX book_title_index ON book REBUILD;
+-- Drop the index
+DROP INDEX book_title_index ON book;
+
+
+Program 8
+
+import java.io.IOException;
+import java.util.StringTokenizer;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+public class WordCount {
+// Mapper Class
+public static class TokenizerMapper
+extends Mapper<Object, Text, Text, IntWritable>{
+private final static IntWritable one = new IntWritable(1);
+private Text word = new Text();
+public void map(Object key, Text value, Context context
+) throws IOException, InterruptedException {
+StringTokenizer itr = new StringTokenizer(value.toString());
+while (itr.hasMoreTokens()) {
+word.set(itr.nextToken().replaceAll("[^a-zA-Z0-9]", "").toLowerCase());
+if (!word.toString().isEmpty()) {
+context.write(word, one);
+}
+}
+}
+}
+// Reducer Class
+public static class IntSumReducer
+extends Reducer<Text,IntWritable,Text,IntWritable> {
+private IntWritable result = new IntWritable();
+public void reduce(Text key, Iterable<IntWritable> values,
+Context context
+) throws IOException, InterruptedException {
+int sum = 0;
+for (IntWritable val : values) {
+sum += val.get();
+}
+result.set(sum);
+context.write(key, result);
+}
+}
+// Driver Code
+public static void main(String[] args) throws Exception {
+Configuration conf = new Configuration();
+Job job = Job.getInstance(conf, "word count");
+job.setJarByClass(WordCount.class);
+job.setMapperClass(TokenizerMapper.class);
+job.setCombinerClass(IntSumReducer.class); // Optional combiner
+job.setReducerClass(IntSumReducer.class);
+job.setOutputKeyClass(Text.class);
+job.setOutputValueClass(IntWritable.class);
+FileInputFormat.addInputPath(job, new Path(args[0])); // HDFS input
+FileOutputFormat.setOutputPath(job, new Path(args[1])); // HDFS output
+System.exit(job.waitForCompletion(true) ? 0 : 1);
+}
+}
+SPARK Program in scala :
+val text_file = sc.textFile("file:///home/bdalab/input.txt")
+val word_count = text_file
+.flatMap(line => line.split(" "))
+.map(word => (word, 1))
+.reduceByKey(_ + _)
+word_count.collect()
